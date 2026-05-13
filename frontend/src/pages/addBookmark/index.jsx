@@ -8,6 +8,7 @@ import { useCategoriesList } from "../../context/categoriesList";
 import Page from "../../components/Page";
 import { BUTTON_BASE_CLASS } from "../../helpers/baseDesign";
 import { notify } from "../../components/Notification";
+import { resetBookmarksCache } from "../../helpers/bookmarkService";
 
 function LoadCircle() {
   return (
@@ -136,6 +137,7 @@ export default function AddPage() {
 
     if (res.ok) {
       setComplete(true);
+      await resetBookmarksCache()
     } else {
       setError(await res.json());
       setSending(false);

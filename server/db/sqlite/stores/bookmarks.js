@@ -1,11 +1,14 @@
+import crypto from "node:crypto";
+
 export default class BookmarksStore {
   constructor(sqliteInstance) {
     this.db = sqliteInstance;
   }
 
   addItem(url, title, desc, icon, categoryId, tags, userId) {
-    const insertQuery = `INSERT INTO bookmarks (url,title,desc,icon,search,categoryId,userId) 
-      VALUES(:url,:title,:desc,:icon,:search,:categoryId,:userId)`;
+    const now = new Date().toISOString();
+    const insertQuery = `INSERT INTO bookmarks (url,title,desc,icon,search,categoryId,userId,updated_at) 
+      VALUES(:url,:title,:desc,:icon,:search,:categoryId,:userId,:updated_at)`;
     const insertParams = {
       url,
       title,
@@ -14,27 +17,29 @@ export default class BookmarksStore {
       userId,
       search: (url + title + desc).toLocaleLowerCase(),
       categoryId,
+      updated_at: now,
     };
     const bookmarkId = this.db
       .prepare(insertQuery)
       .run(insertParams).lastInsertRowid;
 
-    const tagsSelectQuery = `SELECT id FROM tags WHERE name IN (${new Array(
-      tags?.length || 0
-    )
-      .fill("?")
-      .join(",")})`;
-    const tagsSelectIds = this.db.prepare(tagsSelectQuery).all(...tags);
+    if (tags && tags.length > 0) {
+      const tagsSelectQuery = `SELECT id FROM tags WHERE name IN (${new Array(
+        tags.length
+      )
+        .fill("?")
+        .join(",")})`;
+      const tagsSelectIds = this.db.prepare(tagsSelectQuery).all(...tags);
 
-    const tagsRelationsQuery = `INSERT INTO bookmarksTags (bookmarkId, tagId) VALUES(:bookmarkId,:tagId)`;
-    const tagsRelationsStmt = this.db.prepare(tagsRelationsQuery);
-    const transaction = this.db.transaction((ids) => {
-      for (const tagId of ids.map((value) => value.id)) {
-        tagsRelationsStmt.run({ bookmarkId, tagId });
-      }
-    });
-    transaction(tagsSelectIds);
-    transaction(tags);
+      const tagsRelationsQuery = `INSERT INTO bookmarksTags (bookmarkId, tagId) VALUES(:bookmarkId,:tagId)`;
+      const tagsRelationsStmt = this.db.prepare(tagsRelationsQuery);
+      const transaction = this.db.transaction((ids) => {
+        for (const tagId of ids.map((value) => value.id)) {
+          tagsRelationsStmt.run({ bookmarkId, tagId });
+        }
+      });
+      transaction(tagsSelectIds);
+    }
     return bookmarkId;
   }
 
@@ -99,6 +104,34 @@ export default class BookmarksStore {
       .map((bookmark) => {
         return { ...bookmark, tags: bookmark.tags?.split(",") };
       });
+  }
+
+  getUsersMeta(userId) {
+    if (!userId) {
+      return {
+        hash: null,
+        lastModified: null,
+      };
+    }
+
+    const selectQuery = `
+      SELECT COUNT(*) as count, MAX(updated_at) as last_modified 
+      FROM bookmarks 
+      WHERE (userId IN(:userId, 0) OR userId IS NULL)
+    `;
+
+    const result = this.db.prepare(selectQuery).get({ userId });
+
+    const count = result.count || 0;
+    const lastModified = result.last_modified || new Date(0).toISOString();
+
+    const hashString = `${userId}-${count}-${lastModified}`;
+    const hash = crypto.createHash("sha256").update(hashString).digest("hex");
+
+    return {
+      hash: hash,
+      lastModified: lastModified,
+    };
   }
 
   getPage(
@@ -215,9 +248,8 @@ export default class BookmarksStore {
         "(bookmarks.userId IN (:userId, 0) OR bookmarks.userId IS NULL)"
       );
     }
-    
-    if (conditions.length > 0)
-      selectQuery += `WHERE ${conditions.join(" AND ")} `;
+
+    if (conditions.length > 0) selectQuery += `WHERE ${conditions.join(" AND ")} `;
 
     selectQuery += "ORDER BY bookmarkPosition.position";
 
@@ -244,7 +276,6 @@ export default class BookmarksStore {
       `;
     let selectParams = { id };
     let conditions = ["bookmarks.id = :id"];
-    conditions.push();
     if (userId) {
       conditions.push(
         "(bookmarks.userId IN (:userId, 0) OR bookmarks.userId IS NULL)"
@@ -252,8 +283,7 @@ export default class BookmarksStore {
       selectParams.userId = userId;
     }
 
-    if (conditions.length > 0)
-      selectQuery += `WHERE ${conditions.join(" AND ")} `;
+    if (conditions.length > 0) selectQuery += `WHERE ${conditions.join(" AND ")} `;
 
     selectQuery += `GROUP BY bookmarks.id`;
     return this.db.prepare(selectQuery).get(selectParams);
@@ -275,6 +305,7 @@ export default class BookmarksStore {
   }
 
   updateItem(id, url, title, desc, icon, categoryId, tags) {
+    const now = new Date().toISOString();
     let tagsRelationsDeleteQuery = `DELETE FROM bookmarksTags WHERE bookmarkId = :id`;
     this.db.prepare(tagsRelationsDeleteQuery).run({ id });
 
@@ -301,13 +332,20 @@ export default class BookmarksStore {
         title = coalesce(:title,title),
         desc = coalesce(:desc,desc),
         icon = coalesce(:icon,icon),
-        categoryId = coalesce(:categoryId,categoryId)
+        categoryId = coalesce(:categoryId,categoryId),
+        updated_at = :updated_at
       WHERE id = :id`;
 
     return (
-      this.db
-        .prepare(updateQuery)
-        .run({ id, url, title, desc, icon, categoryId }).changes > 0
+      this.db.prepare(updateQuery).run({
+        id,
+        url,
+        title,
+        desc,
+        icon,
+        categoryId,
+        updated_at: now,
+      }).changes > 0
     );
   }
 

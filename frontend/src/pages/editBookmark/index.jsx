@@ -7,6 +7,7 @@ import TagInput from "../addBookmark/components/TagInput";
 import { BUTTON_BASE_CLASS } from "../../helpers/baseDesign";
 import IconInput from "./iconInput";
 import { notify } from "../../components/Notification";
+import { resetBookmarksCache } from "../../helpers/bookmarkService";
 
 function LoadCircle() {
   return (
@@ -85,6 +86,7 @@ export default function EditBookmark() {
     let res = await putJSON(`/api/bookmarks/${id}`, formData);
     setSending(false);
     if (res.ok) {
+      resetBookmarksCache()
       naviate("/links");
     } else {
       let error = await res.json();
