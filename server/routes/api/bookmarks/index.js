@@ -102,6 +102,7 @@ export default async function (fastify, opts) {
         let type = icon.split(";")[0].split(":")[1];
         reply
           .type(type)
+          .header("Cache-Control", "public, max-age=31536000")
           .send(
             Buffer.from(icon.replace(/^data:\w+\/.+;base64,/, ""), "base64")
           );

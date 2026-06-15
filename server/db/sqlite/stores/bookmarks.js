@@ -55,6 +55,7 @@ export default class BookmarksStore {
         title,
         desc,
         created,
+        updated_at,
         categoryId,
         group_concat(tags.name, ',') as tags
       FROM bookmarks 
@@ -169,6 +170,7 @@ export default class BookmarksStore {
         title,
         desc,
         created,
+        updated_at,
         categoryId,
         group_concat(tags.name, ',') as tags
       FROM bookmarks 
@@ -235,7 +237,7 @@ export default class BookmarksStore {
 
   getByCategoryId(userId, categoryId) {
     let selectQuery = `SELECT 
-        id, url, title, desc, bookmarks.categoryId, created, bookmarkPosition.position
+        id, url, title, desc, bookmarks.categoryId, created, updated_at, bookmarkPosition.position
       FROM bookmarks
         LEFT JOIN bookmarkPosition ON bookmarks.id = bookmarkPosition.bookmarkId
       `;
@@ -268,6 +270,7 @@ export default class BookmarksStore {
         title,
         desc,
         created,
+        updated_at,
         categoryId,
         group_concat(tags.name, ',') as tags
       FROM bookmarks 
