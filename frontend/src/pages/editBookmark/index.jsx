@@ -47,6 +47,7 @@ export default function EditBookmark() {
     tags: [],
     icon: "",
     categoryId: 0,
+    updatedAt: "",
   });
 
   const { id } = useParams();
@@ -65,6 +66,7 @@ export default function EditBookmark() {
           tags: json.tags?.split(",") ?? [],
           icon: json.icon,
           categoryId: json.categoryId,
+          updatedAt: json.updated_at,
         });
       }
     }
@@ -121,6 +123,7 @@ export default function EditBookmark() {
             icon={formData.icon}
             url={formData.url}
             setIcon={(icon) => setFormData({ ...formData, icon })}
+            updatedAt={formData.updatedAt}
           />
           <input
             className="w-full bg-transparent rounded border focus:outline-none focus:ring-cyan-600 focus:ring px-4 py-2"

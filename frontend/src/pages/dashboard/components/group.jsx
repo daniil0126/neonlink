@@ -91,7 +91,7 @@ export default function Group({ category }) {
               rel="noopener noreferrer"
             >
               <div className="flex-none relative">
-                <LazyIcon id={bookmark.id} title={bookmark.title} />
+                <LazyIcon id={bookmark.id} title={bookmark.title} updatedAt={bookmark.updated_at} />
               </div>
               <div className="truncate w-full dark:text-white">
                 {bookmark.title}

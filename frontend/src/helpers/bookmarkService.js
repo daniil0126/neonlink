@@ -9,17 +9,19 @@ import { getJSON } from "./fetch";
 export async function getBookmarksWithCache(params, signal) {
     const { offset, limit, query, tag, category } = params;
 
-    let bookmarks = null;
-    let hash = null;
-    let cachedBookmarks = null;
-    let cachedHash = null;
+    let searchParams = new URLSearchParams()
+    searchParams.append("offset", offset);
+    searchParams.append("limit", limit);
+    if (query) searchParams.append("q", query);
+    if (tag) searchParams.append("tag", tag);
+    if (category) searchParams.append("category", category);
+    const queryString = searchParams.toString();
 
+    let cache = null;
     try {
-        cachedBookmarks = localStorage.getItem("neonlink_bookmarks");
-        cachedHash = localStorage.getItem("neonlink_bookmarks_hash");
-        if (cachedBookmarks !== null && typeof cachedBookmarks !== 'undefined') {
-            bookmarks = JSON.parse(cachedBookmarks);
-            hash = cachedHash
+        const cachedData = localStorage.getItem("neonlink_bookmarks_cache");
+        if (cachedData) {
+            cache = JSON.parse(cachedData);
         }
     } catch (error) {
         await resetBookmarksCache()
@@ -31,28 +33,30 @@ export async function getBookmarksWithCache(params, signal) {
         if (!res.ok) throw new Error("Meta fetch failed");
         meta = await res.json();
     } catch (error) {
-        if (bookmarks) {
-            return { bookmarks, currentPage: 1, lastPage: 1, fromCache: true };
+        if (cache && cache.queries && cache.queries[queryString]) {
+            return { ...cache.queries[queryString], fromCache: true };
         }
         throw error;
     }
 
-    if (hash !== meta.hash || !hash || !bookmarks) {
-        let searchParams = new URLSearchParams()
-        searchParams.append("offset", offset);
-        searchParams.append("limit", limit);
-        if (query) searchParams.append("q", query);
-        if (tag) searchParams.append("tag", tag);
-        if (category) searchParams.append("category", category);
+    if (!cache || cache.hash !== meta.hash) {
+        cache = { hash: meta.hash, queries: {} };
+    }
 
+    if (!cache.queries[queryString]) {
         try {
-            let res = await getJSON(`/api/bookmarks/?${searchParams.toString()}`, signal)
+            let res = await getJSON(`/api/bookmarks/?${queryString}`, signal)
 
             if (res.ok) {
                 let json = await res.json()
+                cache.queries[queryString] = {
+                    bookmarks: json.bookmarks,
+                    currentPage: json.currentPage,
+                    lastPage: json.lastPage
+                };
+
                 try {
-                    localStorage.setItem("neonlink_bookmarks", JSON.stringify(json.bookmarks))
-                    localStorage.setItem("neonlink_bookmarks_hash", meta.hash)
+                    localStorage.setItem("neonlink_bookmarks_cache", JSON.stringify(cache))
                 } catch (error) {
                     if (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED") {
                         await resetBookmarksCache()
@@ -60,9 +64,7 @@ export async function getBookmarksWithCache(params, signal) {
                 }
 
                 return {
-                    bookmarks: json.bookmarks,
-                    currentPage: json.currentPage,
-                    lastPage: json.lastPage,
+                    ...cache.queries[queryString],
                     fromCache: false
                 }
             } else {
@@ -70,18 +72,19 @@ export async function getBookmarksWithCache(params, signal) {
                 throw new Error(err.message || "Failed to fetch bookmarks");
             }
         } catch (error) {
-            if (bookmarks) {
-                return { bookmarks, currentPage: 1, lastPage: 1, fromCache: true };
+            if (cache.queries[queryString]) {
+                return { ...cache.queries[queryString], fromCache: true };
             }
             throw error;
         }
     }
 
-    return { bookmarks: bookmarks || [], currentPage: 1, lastPage: 1, fromCache: true };
+    return { ...cache.queries[queryString], fromCache: true };
 }
 
 export async function resetBookmarksCache() {
     try {
+        localStorage.removeItem("neonlink_bookmarks_cache")
         localStorage.removeItem("neonlink_bookmarks")
         localStorage.removeItem("neonlink_bookmarks_hash")
     } catch (error) {
