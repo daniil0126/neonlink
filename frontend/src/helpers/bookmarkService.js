@@ -1,30 +1,26 @@
 import { getJSON } from "./fetch";
 
+const BOOKMARKS_KEY = "neonlink_bookmarks";
+const HASH_KEY = "neonlink_bookmarks_hash";
+
 /**
- * @param {Object} params
- * @param {AbortSignal} signal
- * @returns {Promise<{bookmarks: Array, currentPage: number, lastPage: number, fromCache: boolean}>}
+ * Returns the full array of the current user's bookmarks, served from the
+ * single localStorage cache (neonlink_bookmarks) whenever the per-user meta
+ * hash is unchanged. This is the only bookmark cache in the app — the
+ * dashboard groups it by category and the /links page filters/paginates it,
+ * both client-side.
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<Array>}
  */
-
-export async function getBookmarksWithCache(params, signal) {
-    const { offset, limit, query, tag, category } = params;
-
-    let searchParams = new URLSearchParams()
-    searchParams.append("offset", offset);
-    searchParams.append("limit", limit);
-    if (query) searchParams.append("q", query);
-    if (tag) searchParams.append("tag", tag);
-    if (category) searchParams.append("category", category);
-    const queryString = searchParams.toString();
-
-    let cache = null;
+export async function getAllBookmarksWithCache(signal) {
+    let cached = null;
+    let cachedHash = null;
     try {
-        const cachedData = localStorage.getItem("neonlink_bookmarks_cache");
-        if (cachedData) {
-            cache = JSON.parse(cachedData);
-        }
+        const raw = localStorage.getItem(BOOKMARKS_KEY);
+        cachedHash = localStorage.getItem(HASH_KEY);
+        if (raw != null) cached = JSON.parse(raw);
     } catch (error) {
-        await resetBookmarksCache()
+        await resetBookmarksCache();
     }
 
     let meta;
@@ -33,61 +29,34 @@ export async function getBookmarksWithCache(params, signal) {
         if (!res.ok) throw new Error("Meta fetch failed");
         meta = await res.json();
     } catch (error) {
-        if (cache && cache.queries && cache.queries[queryString]) {
-            return { ...cache.queries[queryString], fromCache: true };
-        }
+        if (cached) return cached; // offline / error: serve stale cache
         throw error;
     }
 
-    if (!cache || cache.hash !== meta.hash) {
-        cache = { hash: meta.hash, queries: {} };
+    if (cached && cachedHash === meta.hash) return cached;
+
+    const res = await getJSON("/api/bookmarks/all", signal);
+    if (!res.ok) {
+        if (cached) return cached;
+        throw new Error("Failed to fetch bookmarks");
     }
-
-    if (!cache.queries[queryString]) {
-        try {
-            let res = await getJSON(`/api/bookmarks/?${queryString}`, signal)
-
-            if (res.ok) {
-                let json = await res.json()
-                cache.queries[queryString] = {
-                    bookmarks: json.bookmarks,
-                    currentPage: json.currentPage,
-                    lastPage: json.lastPage
-                };
-
-                try {
-                    localStorage.setItem("neonlink_bookmarks_cache", JSON.stringify(cache))
-                } catch (error) {
-                    if (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED") {
-                        await resetBookmarksCache()
-                    }
-                }
-
-                return {
-                    ...cache.queries[queryString],
-                    fromCache: false
-                }
-            } else {
-                const err = await res.json()
-                throw new Error(err.message || "Failed to fetch bookmarks");
-            }
-        } catch (error) {
-            if (cache.queries[queryString]) {
-                return { ...cache.queries[queryString], fromCache: true };
-            }
-            throw error;
+    const bookmarks = await res.json();
+    try {
+        localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(bookmarks));
+        localStorage.setItem(HASH_KEY, meta.hash);
+    } catch (error) {
+        if (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED") {
+            await resetBookmarksCache(); // run uncached rather than crash
         }
     }
-
-    return { ...cache.queries[queryString], fromCache: true };
+    return bookmarks;
 }
 
 export async function resetBookmarksCache() {
     try {
-        localStorage.removeItem("neonlink_bookmarks_cache")
-        localStorage.removeItem("neonlink_bookmarks")
-        localStorage.removeItem("neonlink_bookmarks_hash")
+        localStorage.removeItem(BOOKMARKS_KEY);
+        localStorage.removeItem(HASH_KEY);
     } catch (error) {
-        throw new Error(error.message || "Failed to remove localstorge items")
+        throw new Error(error.message || "Failed to remove localstorge items");
     }
 }

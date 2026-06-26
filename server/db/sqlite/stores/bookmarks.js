@@ -263,6 +263,34 @@ export default class BookmarksStore {
       });
   }
 
+  getByUser(userId) {
+    let selectQuery = `SELECT
+        bookmarks.id, url, title, desc, bookmarks.categoryId,
+        category.name as categoryName, created, bookmarkPosition.position,
+        group_concat(tags.name, ',') as tags
+      FROM bookmarks
+        LEFT JOIN bookmarkPosition ON bookmarks.id = bookmarkPosition.bookmarkId
+        LEFT JOIN category ON bookmarks.categoryId = category.id
+        LEFT JOIN bookmarksTags ON bookmarksTags.bookmarkId = bookmarks.id
+        LEFT JOIN tags ON bookmarksTags.tagId = tags.id
+      `;
+    let selectParams = { userId };
+
+    if (userId) {
+      selectQuery +=
+        "WHERE (bookmarks.userId IN (:userId, 0) OR bookmarks.userId IS NULL) ";
+    }
+
+    selectQuery += "GROUP BY bookmarks.id ORDER BY bookmarkPosition.position";
+
+    return this.db
+      .prepare(selectQuery)
+      .all(selectParams)
+      .map((bookmark) => {
+        return { ...bookmark, tags: bookmark.tags?.split(",") };
+      });
+  }
+
   getItemById(userId, id) {
     let selectQuery = `SELECT 
         bookmarks.id,

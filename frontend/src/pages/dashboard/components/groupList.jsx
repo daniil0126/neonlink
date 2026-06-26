@@ -1,8 +1,8 @@
 import { SquaresPlusIcon } from "@heroicons/react/24/outline";
-import React from "react";
-import { useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useCategoriesList } from "../../../context/categoriesList";
+import { getAllBookmarksWithCache } from "../../../helpers/bookmarkService";
 import { useUserSettingsStore, userSettingsKeys } from "../../../stores/userSettingsStore";
 import Group from "../components/group";
 
@@ -11,10 +11,33 @@ export default function GroupList() {
 
   const [ columns ] = useUserSettingsStore(userSettingsKeys.Columns);
 
+  // All bookmarks are loaded once here (single cached object) and grouped by
+  // categoryId, instead of each Group fetching its own category.
+  const [bookmarksByCategory, setBookmarksByCategory] = useState(null);
+  const bookmarksAbort = useRef(null);
+
   useEffect(() => {
     fetchCategories();
+
+    bookmarksAbort.current = new AbortController();
+    getAllBookmarksWithCache(bookmarksAbort.current.signal)
+      .then((all) => {
+        const grouped = {};
+        for (const b of all) {
+          (grouped[b.categoryId] ??= []).push(b);
+        }
+        for (const k in grouped) {
+          grouped[k].sort(
+            (a, b) => (a.position ?? Infinity) - (b.position ?? Infinity)
+          );
+        }
+        setBookmarksByCategory(grouped);
+      })
+      .catch(() => setBookmarksByCategory({})); // render empty columns on failure
+
     return () => {
       abort();
+      bookmarksAbort.current?.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -44,7 +67,12 @@ export default function GroupList() {
         className={`grid md:grid-cols-${columns} grid-cols-1 gap-4 justify-items-center md:w-2/3 w-11/12`}
       >
         {categories.map((category) => (
-          <Group key={category.id} category={category} />
+          <Group
+            key={category.id}
+            category={category}
+            bookmarks={bookmarksByCategory?.[category.id] ?? []}
+            isLoading={bookmarksByCategory === null}
+          />
         ))}
       </div>
     </div>

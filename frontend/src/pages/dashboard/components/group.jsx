@@ -1,15 +1,12 @@
 import React from "react";
-import { useEffect } from "react";
-import { useState } from "react";
 import { pickColorBasedOnBgColor } from "../../../helpers/color";
-import { getJSON } from "../../../helpers/fetch";
 import LazyIcon from "../../../components/LazyIcon";
 import {
   useUserSettingsStore,
   userSettingsKeys,
 } from "../../../stores/userSettingsStore";
 
-export default function Group({ category }) {
+export default function Group({ category, bookmarks = [], isLoading = false }) {
   const [useImageAsBg] = useUserSettingsStore(
     userSettingsKeys.UseBackgroundgImage
   );
@@ -20,8 +17,6 @@ export default function Group({ category }) {
   const [openLinkInNewTab] = useUserSettingsStore(
     userSettingsKeys.OpenLinkInNewTab
   );
-  const [bookmarks, setBookmarks] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
 
   let opacity = 0.8;
   let shadowOpacity = 0.5;
@@ -32,18 +27,6 @@ export default function Group({ category }) {
   let transparentHeader = cardHeaderStyle === "transparent";
   let borderless = cardHeaderStyle === "borderless";
   let solid = cardHeaderStyle === "solid";
-
-  useEffect(() => {
-    setIsLoading(true);
-    const fetch = async () => {
-      let res = await getJSON("/api/bookmarks/category/" + category.id);
-      if (res.ok) {
-        setBookmarks(await res.json());
-        setIsLoading(false);
-      }
-    };
-    fetch();
-  }, [category.id]);
 
   return (
     <div

@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { imgUrlToBase64 } from "../../../helpers/images.js";
 import { netscape } from "../../../helpers/netscape.js";
 import { requireSession } from "../../../logics/handlers.js";
@@ -41,6 +42,15 @@ export default async function (fastify, opts) {
       const meta = appContext.stores.bookmarks.getUsersMeta(user.userId);
 
       return meta
+    }
+  )
+
+  fastify.get(
+    "/all",
+    { preHandler: requireSession(true, true, false) },
+    async function (request, reply) {
+      const user = appContext.request.get(appRequestsKeys.Session);
+      return appContext.stores.bookmarks.getByUser(user.userId);
     }
   )
 
@@ -100,6 +110,15 @@ export default async function (fastify, opts) {
       let icon = appContext.stores.bookmarks.getIconByBookmarkId(id);
       if (icon) {
         let type = icon.split(";")[0].split(":")[1];
+        const etag =
+          '"' + crypto.createHash("sha1").update(icon).digest("base64") + '"';
+        // Icons rarely change; let the browser cache them and revalidate via ETag.
+        reply.header("Cache-Control", "private, max-age=86400");
+        reply.header("ETag", etag);
+        if (request.headers["if-none-match"] === etag) {
+          reply.code(304).send();
+          return;
+        }
         reply
           .type(type)
           .header("Cache-Control", "public, max-age=31536000")
