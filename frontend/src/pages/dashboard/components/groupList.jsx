@@ -2,17 +2,15 @@ import { SquaresPlusIcon } from "@heroicons/react/24/outline";
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useCategoriesList } from "../../../context/categoriesList";
-import { getAllBookmarksWithCache } from "../../../helpers/bookmarkService";
+import { getAllBookmarksWithCache, resetBookmarksCache } from "../../../helpers/bookmarkService";
 import { useUserSettingsStore, userSettingsKeys } from "../../../stores/userSettingsStore";
 import Group from "../components/group";
+import { putJSON } from "../../../helpers/fetch";
 
 export default function GroupList() {
   let { categories, isLoading, fetchCategories, abort } = useCategoriesList();
 
-  const [ columns ] = useUserSettingsStore(userSettingsKeys.Columns);
-
-  // All bookmarks are loaded once here (single cached object) and grouped by
-  // categoryId, instead of each Group fetching its own category.
+  const [columns] = useUserSettingsStore(userSettingsKeys.Columns);
   const [bookmarksByCategory, setBookmarksByCategory] = useState(null);
   const bookmarksAbort = useRef(null);
 
@@ -33,7 +31,7 @@ export default function GroupList() {
         }
         setBookmarksByCategory(grouped);
       })
-      .catch(() => setBookmarksByCategory({})); // render empty columns on failure
+      .catch(() => setBookmarksByCategory({}));
 
     return () => {
       abort();
@@ -41,6 +39,41 @@ export default function GroupList() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleBookmarkDrop = async (bookmarkId, targetCategoryId) => {
+    const sourceCategoryId = Object.keys(bookmarksByCategory).find((catId) =>
+      bookmarksByCategory[catId].some((b) => b.id === bookmarkId)
+    );
+    if (!sourceCategoryId || sourceCategoryId === String(targetCategoryId)) return;
+
+    const bookmark = bookmarksByCategory[sourceCategoryId].find(
+      (b) => b.id === bookmarkId
+    );
+    if (!bookmark) return;
+
+    setBookmarksByCategory((prev) => ({
+      ...prev,
+      [sourceCategoryId]: prev[sourceCategoryId].filter((b) => b.id !== bookmarkId),
+      [targetCategoryId]: [...(prev[targetCategoryId] ?? []), { ...bookmark, categoryId: Number(targetCategoryId) }],
+    }));
+
+    const res = await putJSON(`/api/bookmarks/${bookmarkId}`, {
+      url: bookmark.url,
+      title: bookmark.title,
+      desc: bookmark.desc,
+      categoryId: Number(targetCategoryId),
+    });
+
+    if (!res.ok) {
+      setBookmarksByCategory((prev) => ({
+        ...prev,
+        [sourceCategoryId]: [...prev[sourceCategoryId], bookmark],
+        [targetCategoryId]: prev[targetCategoryId].filter((b) => b.id !== bookmarkId),
+      }));
+    } else {
+      resetBookmarksCache();
+    }
+  };
 
   if (isLoading) return <div></div>;
   if (categories.length === 0) {
@@ -72,8 +105,16 @@ export default function GroupList() {
             category={category}
             bookmarks={bookmarksByCategory?.[category.id] ?? []}
             isLoading={bookmarksByCategory === null}
+            onBookmarkDrop={handleBookmarkDrop}
           />
         ))}
+        <Link
+          to={"/settings#Groups"}
+          className="w-full border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex flex-col items-center justify-center gap-2 py-8 text-gray-400 dark:text-gray-500 hover:border-cyan-400 hover:text-cyan-400 dark:hover:border-cyan-400 dark:hover:text-cyan-400 transition-colors"
+        >
+          <SquaresPlusIcon className="w-8 h-8" />
+          <span className="text-sm font-light">Add group</span>
+        </Link>
       </div>
     </div>
   );

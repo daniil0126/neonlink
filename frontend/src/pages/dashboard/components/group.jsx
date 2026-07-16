@@ -1,4 +1,5 @@
 import React from "react";
+import { useState } from "react";
 import { pickColorBasedOnBgColor } from "../../../helpers/color";
 import LazyIcon from "../../../components/LazyIcon";
 import {
@@ -6,7 +7,7 @@ import {
   userSettingsKeys,
 } from "../../../stores/userSettingsStore";
 
-export default function Group({ category, bookmarks = [], isLoading = false }) {
+export default function Group({ category, bookmarks = [], isLoading = false, onBookmarkDrop }) {
   const [useImageAsBg] = useUserSettingsStore(
     userSettingsKeys.UseBackgroundgImage
   );
@@ -18,6 +19,8 @@ export default function Group({ category, bookmarks = [], isLoading = false }) {
     userSettingsKeys.OpenLinkInNewTab
   );
 
+  const [isDragOver, setIsDragOver] = useState(false);
+
   let opacity = 0.8;
   let shadowOpacity = 0.5;
   let backgroundColor = category.color + opacityIntToHex(opacity);
@@ -28,6 +31,22 @@ export default function Group({ category, bookmarks = [], isLoading = false }) {
   let borderless = cardHeaderStyle === "borderless";
   let solid = cardHeaderStyle === "solid";
 
+  const handleDragStart = (e, id) => {
+    e.dataTransfer.setData("bookmarkId", id);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const bookmarkId = Number(e.dataTransfer.getData("bookmarkId"));
+    if (!bookmarkId) return;
+    onBookmarkDrop(bookmarkId, category.id);
+  };
+
   return (
     <div
       className={`w-full border rounded-lg overflow-hidden shadow-xl ${
@@ -36,12 +55,20 @@ export default function Group({ category, bookmarks = [], isLoading = false }) {
             ? "bg-white dark:bg-gray-800"
             : "backdrop-blur-lg bg-white/30 dark:bg-gray-900/30"
           : "bg-white dark:bg-transparent"
-      }`}
+      } ${isDragOver ? "brightness-150" : ""}`}
       style={{
         borderColor: borderless ? "#00000000" : backgroundColor,
         boxShadow: useNeonShadow
           ? `0 20px 25px -5px ${shadowColor}, 0 8px 10px -6px ${shadowColor}`
           : "",
+      }}
+      onDragOver={handleDragOver}
+      onDrop={(e) => { handleDrop(e); setIsDragOver(false); }}
+      onDragEnter={() => setIsDragOver(true)}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+          setIsDragOver(false);
+        }
       }}
     >
       <div
@@ -55,8 +82,8 @@ export default function Group({ category, bookmarks = [], isLoading = false }) {
         {category.name}
       </div>
       <div className="flex flex-col space-y-1 my-3 mx-3">
-        {isLoading === true ? (
-          [...Array(3)].map((value, idx) => (
+        {isLoading ? (
+          [...Array(3)].map((_, idx) => (
             <div key={idx} className="px-4 py-2 flex space-x-3">
               <div className="w-6 h-6 flex-none rounded-full dark:bg-white/10 bg-black/10 animate-pulse"></div>
               <div className="w-full rounded dark:bg-white/10 bg-black/10 animate-pulse"></div>
@@ -66,20 +93,29 @@ export default function Group({ category, bookmarks = [], isLoading = false }) {
           <div className="text-center font-light dark:text-white">Empty</div>
         ) : (
           bookmarks.map((bookmark) => (
-            <a
-              className="dark:hover:bg-white/10 hover:bg-black/10 px-4 py-2 rounded flex items-center space-x-3"
+            <div
               key={bookmark.id}
-              href={bookmark.url}
-              target={openLinkInNewTab ? "_blank" : "_self"}
-              rel="noopener noreferrer"
+              id={bookmark.id}
+              className="bookmark"
+              onDragStart={(e) => handleDragStart(e, bookmark.id)}
+              draggable
             >
-              <div className="flex-none relative">
-                <LazyIcon id={bookmark.id} title={bookmark.title} updatedAt={bookmark.updated_at} />
-              </div>
-              <div className="truncate w-full dark:text-white">
-                {bookmark.title}
-              </div>
-            </a>
+              <a
+                className="dark:hover:bg-white/10 hover:bg-black/10 px-4 py-2 rounded flex items-center space-x-3"
+                href={bookmark.url}
+                target={openLinkInNewTab ? "_blank" : "_self"}
+                rel="noopener noreferrer"
+                draggable={false}
+                onClick={(e) => { e.currentTarget.style.pointerEvents = "auto"; }}
+              >
+                <div className="flex-none relative">
+                  <LazyIcon id={bookmark.id} title={bookmark.title} updatedAt={bookmark.updated_at} />
+                </div>
+                <div className="truncate w-full dark:text-white">
+                  {bookmark.title}
+                </div>
+              </a>
+            </div>
           ))
         )}
       </div>
