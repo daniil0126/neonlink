@@ -1,5 +1,7 @@
 import React from "react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
+import { PencilSquareIcon } from "@heroicons/react/24/outline";
 import { pickColorBasedOnBgColor } from "../../../helpers/color";
 import LazyIcon from "../../../components/LazyIcon";
 import {
@@ -96,25 +98,35 @@ export default function Group({ category, bookmarks = [], isLoading = false, onB
             <div
               key={bookmark.id}
               id={bookmark.id}
-              className="bookmark"
+              className="bookmark group/bookmark"
               onDragStart={(e) => handleDragStart(e, bookmark.id)}
               draggable
             >
-              <a
-                className="dark:hover:bg-white/10 hover:bg-black/10 px-4 py-2 rounded flex items-center space-x-3"
-                href={bookmark.url}
-                target={openLinkInNewTab ? "_blank" : "_self"}
-                rel="noopener noreferrer"
-                draggable={false}
-                onClick={(e) => { e.currentTarget.style.pointerEvents = "auto"; }}
-              >
-                <div className="flex-none relative">
-                  <LazyIcon id={bookmark.id} title={bookmark.title} updatedAt={bookmark.updated_at} />
-                </div>
-                <div className="truncate w-full dark:text-white">
-                  {bookmark.title}
-                </div>
-              </a>
+              <div className="dark:hover:bg-white/10 hover:bg-black/10 px-4 py-2 rounded flex items-center space-x-3 relative">
+                <a
+                  className="flex items-center space-x-3 flex-1 min-w-0"
+                  href={bookmark.url}
+                  target={openLinkInNewTab ? "_blank" : "_self"}
+                  rel="noopener noreferrer"
+                  draggable={false}
+                  onClick={(e) => { e.currentTarget.style.pointerEvents = "auto"; }}
+                >
+                  <div className="flex-none relative">
+                    <LazyIcon id={bookmark.id} title={bookmark.title} updatedAt={bookmark.updated_at} />
+                  </div>
+                  <div className="truncate dark:text-white">
+                    {bookmark.title}
+                  </div>
+                </a>
+                <Link
+                  to={`/edit/${bookmark.id}`}
+                  draggable={false}
+                  className="flex-none opacity-0 group-hover/bookmark:opacity-100 transition-opacity text-gray-400 hover:text-cyan-500 dark:text-gray-500 dark:hover:text-cyan-400"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <PencilSquareIcon className="w-4 h-4" />
+                </Link>
+              </div>
             </div>
           ))
         )}

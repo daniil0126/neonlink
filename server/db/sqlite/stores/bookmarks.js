@@ -266,7 +266,7 @@ export default class BookmarksStore {
   getByUser(userId) {
     let selectQuery = `SELECT
         bookmarks.id, url, title, desc, bookmarks.categoryId,
-        category.name as categoryName, created, bookmarkPosition.position,
+        category.name as categoryName, created, updated_at, bookmarkPosition.position,
         group_concat(tags.name, ',') as tags
       FROM bookmarks
         LEFT JOIN bookmarkPosition ON bookmarks.id = bookmarkPosition.bookmarkId
